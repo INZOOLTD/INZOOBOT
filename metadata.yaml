@@ -1,4 +1,4 @@
-name: INZOOBOT # 这是你的插件的唯一识别名。
+name: inzoobot # 这是你的插件的唯一识别名。
 desc: 这是映筑文化的官方插件测试版。 # 插件简短描述
 version: v1.0beat # 插件版本号。格式：v1.1.1 或者 v1.1
 author: INZOO # 作者
