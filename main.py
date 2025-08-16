@@ -9,7 +9,7 @@ import os
 @register(
     plugin_id="yingzhu-helper",
     author="YourName",
-    name="映筑文化小助手",
+    name="INZOOBOT",
     version="1.0.0",
     repo_url="https://your-repo-url.com"
 )
