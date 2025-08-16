@@ -1,8 +1,6 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Star
 from astrbot.api import logger
-from astrbot.api.config import get_config
-from .config import PluginConfig, GroupConfig
 
 
 class GroupManagement(Star):
@@ -10,12 +8,11 @@ class GroupManagement(Star):
 
     def __init__(self, context):
         super().__init__(context)
-        # 配置管理器将从主类继承，这里不需要重新初始化
 
     def is_group_management_enabled(self, group_id: str) -> bool:
         """检查指定群是否启用了群管功能"""
         # 先检查全局是否启用群管功能
-        if not self.plugin_config.group_management_enabled:
+        if not self.config_manager.global_config.group_management_enabled:
             return False
 
         group_config = self.config_manager.get_group_config(group_id)
@@ -24,7 +21,7 @@ class GroupManagement(Star):
     def check_permissions(self, event: AstrMessageEvent, require_group: bool = False) -> tuple[bool, str]:
         """检查权限"""
         # 检查全局功能是否启用
-        if not self.plugin_config.group_management_enabled:
+        if not self.config_manager.global_config.group_management_enabled:
             return (False, "❌ 群管功能已被全局禁用")
 
         # 检查是否为管理员
@@ -40,7 +37,7 @@ class GroupManagement(Star):
     @filter.command("群管帮助")
     async def group_management_help(self, event: AstrMessageEvent):
         """群管功能帮助菜单"""
-        if not self.plugin_config.group_management_enabled:
+        if not self.config_manager.global_config.group_management_enabled:
             yield event.plain_result("❌ 群管功能已被全局禁用")
             return
 
@@ -94,10 +91,8 @@ class GroupManagement(Star):
         self.config_manager.update_group_config(group_id, group_config)
         yield event.plain_result("❌ 群管功能已关闭")
 
-    # 其他群管功能方法（添加处罚词、删除处罚词等）保持不变
     @filter.command("添加处罚词")
     async def add_punish_word(self, event: AstrMessageEvent):
-        # 实现代码保持不变
         has_perm, msg = self.check_permissions(event, require_group=True)
         if not has_perm:
             yield event.plain_result(msg)
@@ -127,7 +122,6 @@ class GroupManagement(Star):
 
     @filter.command("删除处罚词")
     async def remove_punish_word(self, event: AstrMessageEvent):
-        # 实现代码保持不变
         has_perm, msg = self.check_permissions(event, require_group=True)
         if not has_perm:
             yield event.plain_result(msg)
@@ -153,7 +147,6 @@ class GroupManagement(Star):
 
     @filter.command("查看处罚词")
     async def list_punish_words(self, event: AstrMessageEvent):
-        # 实现代码保持不变
         has_perm, msg = self.check_permissions(event, require_group=True)
         if not has_perm:
             yield event.plain_result(msg)
@@ -171,7 +164,6 @@ class GroupManagement(Star):
 
     @filter.command("群管状态")
     async def group_management_status(self, event: AstrMessageEvent):
-        # 实现代码保持不变
         has_perm, msg = self.check_permissions(event, require_group=True)
         if not has_perm:
             yield event.plain_result(msg)
@@ -192,7 +184,6 @@ class GroupManagement(Star):
 
     @filter.all()
     async def check_messages(self, event: AstrMessageEvent):
-        # 实现代码保持不变
         if not event.is_group_chat():
             return
 

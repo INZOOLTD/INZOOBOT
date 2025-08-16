@@ -1,12 +1,10 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Star
 from astrbot.api import logger
-from astrbot.api.config import get_config
 import random
 import psutil
 import datetime
 import platform
-from .config import PluginConfig
 
 
 class SystemStatus(Star):
@@ -14,14 +12,12 @@ class SystemStatus(Star):
 
     def __init__(self, context):
         super().__init__(context)
-        # 获取插件配置
-        self.plugin_config = get_config("inzoobot_combined", PluginConfig)
 
     @filter.command("系统状态")
     async def system_status(self, event: AstrMessageEvent):
         '''私聊查询系统状态（仅管理员可用）'''
-        # 检查功能是否启用
-        if not self.plugin_config.system_status_enabled:
+        # 检查功能是否启用（从全局配置获取）
+        if not self.config_manager.global_config.system_status_enabled:
             yield event.plain_result("❌ 系统状态查询功能已被禁用")
             return
 
@@ -50,7 +46,7 @@ class SystemStatus(Star):
 
         # 管理员查询系统状态
         try:
-            # 获取系统信息并构建消息（保持与之前相同）
+            # 获取系统信息并构建消息
             system = platform.system()
             node = platform.node()
             release = platform.release()

@@ -1,4 +1,3 @@
-from astrbot.api.config import BaseModel, Field, register_config
 from pathlib import Path
 import json
 from astrbot.api import logger
@@ -10,33 +9,44 @@ CONFIG_PATH = Path(__file__).parent / "data" / "config.json"
 CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-class GroupConfig(BaseModel):
+class GroupConfig:
     """单个群组的配置模型"""
-    enabled: bool = Field(default=False, description="是否启用群管功能")
-    punish_words: list[str] = Field(default_factory=list, description="处罚词列表")
+
+    def __init__(self):
+        self.enabled = False  # 是否启用群管功能
+        self.punish_words = []  # 处罚词列表
+
+    def to_dict(self):
+        """转换为字典用于序列化"""
+        return {
+            "enabled": self.enabled,
+            "punish_words": self.punish_words
+        }
+
+    @staticmethod
+    def from_dict(data):
+        """从字典创建对象"""
+        config = GroupConfig()
+        config.enabled = data.get("enabled", False)
+        config.punish_words = data.get("punish_words", [])
+        return config
 
 
-class PluginConfig(BaseModel):
-    """插件全局配置模型，用于AstrBot后台配置界面"""
-    system_status_enabled: bool = Field(default=True, description="是否启用系统状态查询功能")
-    group_management_enabled: bool = Field(default=True, description="是否启用群管功能")
-    default_welcome_message: str = Field(default="欢迎加入本群！", description="默认入群欢迎消息")
+class PluginConfig:
+    """插件全局配置"""
 
-
-# 注册配置到AstrBot后台
-register_config(
-    "inzoobot_combined",
-    PluginConfig,
-    "映筑视觉机器人配置",
-    description="配置系统状态查询和群管功能的相关参数"
-)
+    def __init__(self):
+        self.system_status_enabled = True  # 是否启用系统状态查询功能
+        self.group_management_enabled = True  # 是否启用群管功能
+        self.default_welcome_message = "欢迎加入本群！"  # 默认入群欢迎消息
 
 
 class ConfigManager:
     """配置管理类，处理持久化存储"""
 
     def __init__(self):
-        self.group_configs: dict[str, GroupConfig] = {}  # {群号字符串: 群配置}
+        self.group_configs = {}  # {群号字符串: 群配置}
+        self.global_config = PluginConfig()  # 全局配置
         self.load_group_configs()
 
     def load_group_configs(self):
@@ -48,7 +58,7 @@ class ConfigManager:
 
                 # 转换为GroupConfig对象
                 for group_id, config_data in data.items():
-                    self.group_configs[group_id] = GroupConfig(**config_data)
+                    self.group_configs[group_id] = GroupConfig.from_dict(config_data)
 
                 logger.info(f"已加载 {len(self.group_configs)} 个群组的配置")
         except Exception as e:
@@ -60,7 +70,7 @@ class ConfigManager:
         try:
             # 转换为可序列化的字典
             data = {
-                group_id: config.dict()
+                group_id: config.to_dict()
                 for group_id, config in self.group_configs.items()
             }
 
