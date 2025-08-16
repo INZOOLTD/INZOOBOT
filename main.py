@@ -1,24 +1,83 @@
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+import socket
+import platform
+import os
 
-@register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
-class MyPlugin(Star):
+
+@register("yingzhu_helper", "YourName", "映筑文化小助手插件", "1.0.0")
+class YingZhuHelper(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        # 插件版本号
+        self.version = "1.0.0"
 
     async def initialize(self):
-        """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-    
-    # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
-    @filter.command("helloworld")
-    async def helloworld(self, event: AstrMessageEvent):
-        """这是一个 hello world 指令""" # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
-        user_name = event.get_sender_name()
-        message_str = event.message_str # 用户发的纯文本消息字符串
-        message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
-        logger.info(message_chain)
-        yield event.plain_result(f"Hello, {user_name}, 你发了 {message_str}!") # 发送一条纯文本消息
+        """初始化插件"""
+        logger.info("映筑文化小助手插件已初始化")
+
+    @filter.message(keywords="菜单")
+    async def handle_menu(self, event: AstrMessageEvent):
+        """处理菜单消息，返回系统信息"""
+        try:
+            # 获取服务器IP并打码处理
+            server_ip = self.get_server_ip()
+            masked_ip = self.mask_ip(server_ip)
+
+            # 获取系统状态
+            system_status = self.get_system_status()
+
+            # 构建回复消息
+            reply = (
+                f"你好，我是映筑文化小助手，目前正在测试中\n"
+                f"版本：{self.version}\n"
+                f"服务器IP：{masked_ip}\n"
+                f"系统状态：{system_status}"
+            )
+
+            yield event.plain_result(reply)
+        except Exception as e:
+            logger.error(f"处理菜单请求时出错: {str(e)}")
+            yield event.plain_result("抱歉，处理请求时发生错误")
+
+    def get_server_ip(self):
+        """获取服务器IP地址"""
+        try:
+            # 创建一个临时socket连接来获取本机IP
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
+        except Exception as e:
+            logger.error(f"获取服务器IP失败: {str(e)}")
+            return "未知"
+
+    def mask_ip(self, ip):
+        """对IP地址进行打码处理，保留前两段，隐藏后两段"""
+        if not ip or ip == "未知":
+            return ip
+
+        parts = ip.split('.')
+        if len(parts) == 4:
+            # 例如：192.168.xxx.xxx
+            return f"{parts[0]}.{parts[1]}.xxx.xxx"
+        return ip
+
+    def get_system_status(self):
+        """获取系统状态信息"""
+        try:
+            # 获取系统类型
+            system = platform.system()
+            # 获取系统版本
+            release = platform.release()
+            # 获取Python版本
+            python_version = platform.python_version()
+
+            return f"运行中 | 系统: {system} {release} | Python: {python_version}"
+        except Exception as e:
+            logger.error(f"获取系统状态失败: {str(e)}")
+            return "正常运行中"
 
     async def terminate(self):
-        """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+        """销毁插件"""
+        logger.info("映筑文化小助手插件已停用")
