@@ -1,12 +1,15 @@
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from astrbot.star import Star, register, filter
+from astrbot.star.event import MessageEvent, PrivateMessageEvent, GroupMessageEvent
+from astrbot.star.context import Context
+from astrbot.log import logger
 from pathlib import Path
 import json
 import random
 import psutil
 import datetime
 import platform
+from typing import Dict, List, Tuple, Optional
+import asyncio
 
 # 配置文件路径
 CONFIG_PATH = Path(__file__).parent / "data" / "config.json"
@@ -23,7 +26,7 @@ class GroupConfig:
         self.enabled = False  # 是否启用群管功能
         self.punish_words = []  # 处罚词列表
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         """转换为字典用于序列化"""
         return {
             "enabled": self.enabled,
@@ -31,7 +34,7 @@ class GroupConfig:
         }
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: Dict) -> "GroupConfig":
         """从字典创建对象"""
         config = cls()
         config.enabled = data.get("enabled", False)
@@ -47,7 +50,7 @@ class PluginConfig:
         self.group_management_enabled = True  # 是否启用群管功能
         self.default_welcome_message = "欢迎加入本群！"  # 默认入群欢迎消息
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         """转换为字典用于序列化"""
         return {
             "system_status_enabled": self.system_status_enabled,
@@ -56,7 +59,7 @@ class PluginConfig:
         }
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: Dict) -> "PluginConfig":
         """从字典创建对象"""
         config = cls()
         config.system_status_enabled = data.get("system_status_enabled", True)
@@ -69,12 +72,12 @@ class ConfigManager:
     """配置管理类，处理持久化存储"""
 
     def __init__(self):
-        self.group_configs = {}  # {群号字符串: GroupConfig对象}
+        self.group_configs: Dict[str, GroupConfig] = {}  # {群号字符串: GroupConfig对象}
         self.global_config = PluginConfig()  # 全局配置
         self.load_group_configs()
         self.load_global_config()
 
-    def load_global_config(self):
+    def load_global_config(self) -> None:
         """加载全局配置"""
         try:
             if GLOBAL_CONFIG_PATH.exists():
@@ -86,7 +89,7 @@ class ConfigManager:
             logger.error(f"加载全局配置失败: {str(e)}")
             self.global_config = PluginConfig()
 
-    def save_global_config(self):
+    def save_global_config(self) -> None:
         """保存全局配置"""
         try:
             with open(GLOBAL_CONFIG_PATH, 'w', encoding='utf-8') as f:
@@ -95,7 +98,7 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"保存全局配置失败: {str(e)}")
 
-    def load_group_configs(self):
+    def load_group_configs(self) -> None:
         """从文件加载群组配置"""
         try:
             if CONFIG_PATH.exists():
@@ -111,7 +114,7 @@ class ConfigManager:
             logger.error(f"加载群组配置失败: {str(e)}")
             self.group_configs = {}
 
-    def save_group_configs(self):
+    def save_group_configs(self) -> None:
         """保存群组配置到文件"""
         try:
             # 转换为可序列化的字典
@@ -134,34 +137,43 @@ class ConfigManager:
             self.save_group_configs()
         return self.group_configs[group_id]
 
-    def update_group_config(self, group_id: str, config: GroupConfig):
+    def update_group_config(self, group_id: str, config: GroupConfig) -> None:
         """更新指定群组的配置"""
         self.group_configs[group_id] = config
         self.save_group_configs()
 
 
-@register("inzoobot", "inzoo", "映筑视觉官方机器人", "1.0.0", "https://github.com/INZOOLTD/INZOOBOT")
+@register(
+    name="inzoobot",
+    display_name="inzoo",
+    description="映筑视觉官方机器人",
+    version="1.0.0",
+    homepage="https://github.com/INZOOLTD/INZOOBOT"
+)
 class InzoobotPlugin(Star):
+    """映筑视觉官方机器人插件"""
+
     def __init__(self, context: Context):
         super().__init__(context)
         self.config_manager = ConfigManager()
+        logger.info("映筑视觉官方机器人插件已初始化")
 
-    # 系统状态功能
-    @filter.command("系统状态")
-    async def system_status(self, event: AstrMessageEvent):
-        '''私聊查询系统状态（仅管理员可用）'''
+    # 系统状态功能 - 仅私聊可用
+    @filter.command("系统状态", aliases=["sysinfo"], description="查询系统状态信息")
+    async def handle_system_status(self, event: MessageEvent):
+        """处理系统状态查询命令"""
         # 检查功能是否启用
         if not self.config_manager.global_config.system_status_enabled:
-            yield event.plain_result("❌ 系统状态查询功能已被禁用")
+            yield event.response("❌ 系统状态查询功能已被禁用")
             return
 
         # 检查是否为私聊
-        if not event.is_private_chat():
-            yield event.plain_result("请在私聊中使用该指令")
+        if not isinstance(event, PrivateMessageEvent):
+            yield event.response("请在私聊中使用该指令")
             return
 
         # 检查是否为管理员
-        if not event.is_admin():
+        if not event.sender.is_admin:
             # 非管理员随机回复，按指定概率分布
             responses = [
                 "切你是谁",  # 50% 概率
@@ -175,7 +187,7 @@ class InzoobotPlugin(Star):
                 "你不是主人",
                 "123起开"  # 10% 概率
             ]
-            yield event.plain_result(random.choice(responses))
+            yield event.response(random.choice(responses))
             return
 
         # 管理员查询系统状态
@@ -243,10 +255,10 @@ class InzoobotPlugin(Star):
                 f"  - 运行时间：{uptime_str}\n\n"
                 f"👥 当前用户数：{user_count}"
             )
-            yield event.plain_result(status_msg)
+            yield event.response(status_msg)
         except Exception as e:
             logger.error(f"获取系统状态失败：{str(e)}")
-            yield event.plain_result("❌ 获取系统状态失败，请稍后再试")
+            yield event.response("❌ 获取系统状态失败，请稍后再试")
 
     # 群管功能辅助方法
     def is_group_management_enabled(self, group_id: str) -> bool:
@@ -256,25 +268,25 @@ class InzoobotPlugin(Star):
         group_config = self.config_manager.get_group_config(group_id)
         return group_config.enabled
 
-    def check_permissions(self, event: AstrMessageEvent, require_group: bool = False) -> tuple[bool, str]:
+    def check_permissions(self, event: MessageEvent, require_group: bool = False) -> Tuple[bool, str]:
         """检查权限"""
         if not self.config_manager.global_config.group_management_enabled:
             return (False, "❌ 群管功能已被全局禁用")
 
-        if not event.is_admin():
+        if not event.sender.is_admin:
             return (False, "❌ 你没有权限执行此操作，需要管理员权限")
 
-        if require_group and not event.is_group_chat():
+        if require_group and not isinstance(event, GroupMessageEvent):
             return (False, "❌ 请在群聊中使用此指令")
 
         return (True, "")
 
     # 群管功能指令
-    @filter.command("群管帮助")
-    async def group_management_help(self, event: AstrMessageEvent):
-        """群管功能帮助菜单"""
+    @filter.command("群管帮助", description="显示群管功能帮助信息")
+    async def handle_group_management_help(self, event: MessageEvent):
+        """处理群管帮助命令"""
         if not self.config_manager.global_config.group_management_enabled:
-            yield event.plain_result("❌ 群管功能已被全局禁用")
+            yield event.response("❌ 群管功能已被全局禁用")
             return
 
         help_msg = (
@@ -287,162 +299,206 @@ class InzoobotPlugin(Star):
             "6. 群管状态 - 查看当前群管功能状态\n"
             "\n⚠️ 注意：所有群管指令仅管理员可使用"
         )
-        yield event.plain_result(help_msg)
+        yield event.response(help_msg)
 
-    @filter.command("开启群管")
-    async def enable_group_management(self, event: AstrMessageEvent):
-        """开启群管功能"""
+    @filter.command("开启群管", description="开启当前群的群管功能")
+    async def handle_enable_group_management(self, event: MessageEvent):
+        """处理开启群管命令"""
         has_perm, msg = self.check_permissions(event, require_group=True)
         if not has_perm:
-            yield event.plain_result(msg)
+            yield event.response(msg)
             return
 
-        group_id = str(event.get_group_id())
-        group_config = self.config_manager.get_group_config(group_id)
+        if isinstance(event, GroupMessageEvent):
+            group_id = str(event.group.id)
+            group_config = self.config_manager.get_group_config(group_id)
 
-        if group_config.enabled:
-            yield event.plain_result("✅ 群管功能已经是开启状态")
-            return
-
-        group_config.enabled = True
-        self.config_manager.update_group_config(group_id, group_config)
-        yield event.plain_result("✅ 群管功能已开启")
-
-    @filter.command("关闭群管")
-    async def disable_group_management(self, event: AstrMessageEvent):
-        """关闭群管功能"""
-        has_perm, msg = self.check_permissions(event, require_group=True)
-        if not has_perm:
-            yield event.plain_result(msg)
-            return
-
-        group_id = str(event.get_group_id())
-        group_config = self.config_manager.get_group_config(group_id)
-
-        if not group_config.enabled:
-            yield event.plain_result("❌ 群管功能已经是关闭状态")
-            return
-
-        group_config.enabled = False
-        self.config_manager.update_group_config(group_id, group_config)
-        yield event.plain_result("❌ 群管功能已关闭")
-
-    @filter.command("添加处罚词")
-    async def add_punish_word(self, event: AstrMessageEvent):
-        has_perm, msg = self.check_permissions(event, require_group=True)
-        if not has_perm:
-            yield event.plain_result(msg)
-            return
-
-        content = event.get_content().strip()
-        parts = content.split(maxsplit=1)
-        if len(parts) < 2:
-            yield event.plain_result("❌ 请指定要添加的处罚词，格式：添加处罚词 [词语]")
-            return
-
-        word = parts[1].strip()
-        if not word:
-            yield event.plain_result("❌ 处罚词不能为空")
-            return
-
-        group_id = str(event.get_group_id())
-        group_config = self.config_manager.get_group_config(group_id)
-
-        if word in group_config.punish_words:
-            yield event.plain_result(f"❌ 处罚词「{word}」已存在")
-            return
-
-        group_config.punish_words.append(word)
-        self.config_manager.update_group_config(group_id, group_config)
-        yield event.plain_result(f"✅ 已添加处罚词：「{word}」")
-
-    @filter.command("删除处罚词")
-    async def remove_punish_word(self, event: AstrMessageEvent):
-        has_perm, msg = self.check_permissions(event, require_group=True)
-        if not has_perm:
-            yield event.plain_result(msg)
-            return
-
-        content = event.get_content().strip()
-        parts = content.split(maxsplit=1)
-        if len(parts) < 2:
-            yield event.plain_result("❌ 请指定要删除的处罚词，格式：删除处罚词 [词语]")
-            return
-
-        word = parts[1].strip()
-        group_id = str(event.get_group_id())
-        group_config = self.config_manager.get_group_config(group_id)
-
-        if word not in group_config.punish_words:
-            yield event.plain_result(f"❌ 处罚词「{word}」不存在")
-            return
-
-        group_config.punish_words.remove(word)
-        self.config_manager.update_group_config(group_id, group_config)
-        yield event.plain_result(f"✅ 已删除处罚词：「{word}」")
-
-    @filter.command("查看处罚词")
-    async def list_punish_words(self, event: AstrMessageEvent):
-        has_perm, msg = self.check_permissions(event, require_group=True)
-        if not has_perm:
-            yield event.plain_result(msg)
-            return
-
-        group_id = str(event.get_group_id())
-        group_config = self.config_manager.get_group_config(group_id)
-
-        if not group_config.punish_words:
-            yield event.plain_result("📋 当前没有设置处罚词")
-            return
-
-        words_list = "\n".join([f"- {word}" for word in group_config.punish_words])
-        yield event.plain_result(f"📋 当前处罚词列表：\n{words_list}")
-
-    @filter.command("群管状态")
-    async def group_management_status(self, event: AstrMessageEvent):
-        has_perm, msg = self.check_permissions(event, require_group=True)
-        if not has_perm:
-            yield event.plain_result(msg)
-            return
-
-        group_id = str(event.get_group_id())
-        group_config = self.config_manager.get_group_config(group_id)
-        status = "开启" if group_config.enabled else "关闭"
-        word_count = len(group_config.punish_words)
-
-        status_msg = (
-            f"📊 群管功能状态：\n"
-            f"• 功能状态：{status}\n"
-            f"• 处罚词数量：{word_count}个\n"
-            f"• 群号：{group_id}"
-        )
-        yield event.plain_result(status_msg)
-
-    @filter.all()
-    async def check_messages(self, event: AstrMessageEvent):
-        """监控消息，检查是否包含处罚词"""
-        if not event.is_group_chat():
-            return
-
-        group_id = str(event.get_group_id())
-        if not self.is_group_management_enabled(group_id):
-            return
-
-        group_config = self.config_manager.get_group_config(group_id)
-        punish_words = group_config.punish_words
-
-        if not punish_words:
-            return
-
-        content = event.get_content().lower()
-        for word in punish_words:
-            if word.lower() in content:
-                logger.info(f"检测到处罚词「{word}」，发送者：{event.get_sender_name()}")
-                yield event.plain_result(f"⚠️ 检测到敏感词「{word}」，请注意言行规范！")
+            if group_config.enabled:
+                yield event.response("✅ 群管功能已经是开启状态")
                 return
 
+            group_config.enabled = True
+            self.config_manager.update_group_config(group_id, group_config)
+            yield event.response("✅ 群管功能已开启")
+            return
+
+        yield event.response("❌ 此命令只能在群聊中使用")
+
+    @filter.command("关闭群管", description="关闭当前群的群管功能")
+    async def handle_disable_group_management(self, event: MessageEvent):
+        """处理关闭群管命令"""
+        has_perm, msg = self.check_permissions(event, require_group=True)
+        if not has_perm:
+            yield event.response(msg)
+            return
+
+        if isinstance(event, GroupMessageEvent):
+            group_id = str(event.group.id)
+            group_config = self.config_manager.get_group_config(group_id)
+
+            if not group_config.enabled:
+                yield event.response("❌ 群管功能已经是关闭状态")
+                return
+
+            group_config.enabled = False
+            self.config_manager.update_group_config(group_id, group_config)
+            yield event.response("❌ 群管功能已关闭")
+            return
+
+        yield event.response("❌ 此命令只能在群聊中使用")
+
+    @filter.command("添加处罚词", description="添加需要处罚的关键词")
+    async def handle_add_punish_word(self, event: MessageEvent):
+        """处理添加处罚词命令"""
+        has_perm, msg = self.check_permissions(event, require_group=True)
+        if not has_perm:
+            yield event.response(msg)
+            return
+
+        if isinstance(event, GroupMessageEvent):
+            # 提取命令参数
+            cmd_content = event.message.content.strip()
+            parts = cmd_content.split(maxsplit=1)
+            if len(parts) < 2:
+                yield event.response("❌ 请指定要添加的处罚词，格式：添加处罚词 [词语]")
+                return
+
+            word = parts[1].strip()
+            if not word:
+                yield event.response("❌ 处罚词不能为空")
+                return
+
+            group_id = str(event.group.id)
+            group_config = self.config_manager.get_group_config(group_id)
+
+            if word in group_config.punish_words:
+                yield event.response(f"❌ 处罚词「{word}」已存在")
+                return
+
+            group_config.punish_words.append(word)
+            self.config_manager.update_group_config(group_id, group_config)
+            yield event.response(f"✅ 已添加处罚词：「{word}」")
+            return
+
+        yield event.response("❌ 此命令只能在群聊中使用")
+
+    @filter.command("删除处罚词", description="移除处罚关键词")
+    async def handle_remove_punish_word(self, event: MessageEvent):
+        """处理删除处罚词命令"""
+        has_perm, msg = self.check_permissions(event, require_group=True)
+        if not has_perm:
+            yield event.response(msg)
+            return
+
+        if isinstance(event, GroupMessageEvent):
+            # 提取命令参数
+            cmd_content = event.message.content.strip()
+            parts = cmd_content.split(maxsplit=1)
+            if len(parts) < 2:
+                yield event.response("❌ 请指定要删除的处罚词，格式：删除处罚词 [词语]")
+                return
+
+            word = parts[1].strip()
+            group_id = str(event.group.id)
+            group_config = self.config_manager.get_group_config(group_id)
+
+            if word not in group_config.punish_words:
+                yield event.response(f"❌ 处罚词「{word}」不存在")
+                return
+
+            group_config.punish_words.remove(word)
+            self.config_manager.update_group_config(group_id, group_config)
+            yield event.response(f"✅ 已删除处罚词：「{word}」")
+            return
+
+        yield event.response("❌ 此命令只能在群聊中使用")
+
+    @filter.command("查看处罚词", description="显示当前所有处罚关键词")
+    async def handle_list_punish_words(self, event: MessageEvent):
+        """处理查看处罚词命令"""
+        has_perm, msg = self.check_permissions(event, require_group=True)
+        if not has_perm:
+            yield event.response(msg)
+            return
+
+        if isinstance(event, GroupMessageEvent):
+            group_id = str(event.group.id)
+            group_config = self.config_manager.get_group_config(group_id)
+
+            if not group_config.punish_words:
+                yield event.response("📋 当前没有设置处罚词")
+                return
+
+            words_list = "\n".join([f"- {word}" for word in group_config.punish_words])
+            yield event.response(f"📋 当前处罚词列表：\n{words_list}")
+            return
+
+        yield event.response("❌ 此命令只能在群聊中使用")
+
+    @filter.command("群管状态", description="查看当前群管功能状态")
+    async def handle_group_management_status(self, event: MessageEvent):
+        """处理群管状态查询命令"""
+        has_perm, msg = self.check_permissions(event, require_group=True)
+        if not has_perm:
+            yield event.response(msg)
+            return
+
+        if isinstance(event, GroupMessageEvent):
+            group_id = str(event.group.id)
+            group_config = self.config_manager.get_group_config(group_id)
+            status = "开启" if group_config.enabled else "关闭"
+            word_count = len(group_config.punish_words)
+
+            status_msg = (
+                f"📊 群管功能状态：\n"
+                f"• 功能状态：{status}\n"
+                f"• 处罚词数量：{word_count}个\n"
+                f"• 群号：{group_id}"
+            )
+            yield event.response(status_msg)
+            return
+
+        yield event.response("❌ 此命令只能在群聊中使用")
+
+    @filter.all()
+    async def handle_message_monitoring(self, event: MessageEvent):
+        """监控消息，检查是否包含处罚词"""
+        if isinstance(event, GroupMessageEvent):
+            group_id = str(event.group.id)
+            if not self.is_group_management_enabled(group_id):
+                return
+
+            group_config = self.config_manager.get_group_config(group_id)
+            punish_words = group_config.punish_words
+
+            if not punish_words:
+                return
+
+            content = event.message.content.lower()
+            for word in punish_words:
+                if word.lower() in content:
+                    logger.info(f"检测到处罚词「{word}」，发送者：{event.sender.name}")
+                    yield event.response(f"⚠️ 检测到敏感词「{word}」，请注意言行规范！")
+                    return
+
     async def terminate(self):
-        '''插件卸载/停用时调用'''
+        """插件卸载/停用时调用"""
         self.config_manager.save_group_configs()
         self.config_manager.save_global_config()
-        logger.info("插件已停用，配置已保存")
+        logger.info("映筑视觉官方机器人插件已停用，配置已保存")
+
+
+# 机器人启动入口
+async def main():
+    from astrbot.star import run
+    # 运行机器人，加载当前文件中的插件
+    await run(plugins=[InzoobotPlugin])
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("机器人已手动停止")
+    except Exception as e:
+        logger.error(f"机器人运行出错: {str(e)}", exc_info=True)
