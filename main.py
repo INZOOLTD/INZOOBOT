@@ -6,12 +6,12 @@ import platform
 import os
 
 
-@register("yingzhu_helper", "YourName", "映筑文化小助手插件", "1.0.0")
+@register("yingzhu_helper", "YourName", "映筑文化小助手插件", "1.0.1")
 class YingZhuHelper(Star):
     def __init__(self, context: Context):
         super().__init__(context)
         # 插件版本号
-        self.version = "1.0.0"
+        self.version = "1.0.1"
 
     async def initialize(self):
         """初始化插件"""
@@ -21,6 +21,9 @@ class YingZhuHelper(Star):
     async def handle_menu(self, event: AstrMessageEvent):
         """处理菜单消息，返回系统信息"""
         try:
+            # 安全获取发送者名称，添加空值检查
+            user_name = event.get_sender_name() or "用户"
+
             # 获取服务器IP并打码处理
             server_ip = self.get_server_ip()
             masked_ip = self.mask_ip(server_ip)
@@ -28,9 +31,9 @@ class YingZhuHelper(Star):
             # 获取系统状态
             system_status = self.get_system_status()
 
-            # 构建回复消息
+            # 构建回复消息，包含问候语
             reply = (
-                f"你好，我是映筑文化小助手，目前正在测试中\n"
+                f"你好{user_name}，我是映筑文化小助手，目前正在测试中\n"
                 f"版本：{self.version}\n"
                 f"服务器IP：{masked_ip}\n"
                 f"系统状态：{system_status}"
@@ -67,11 +70,11 @@ class YingZhuHelper(Star):
         """获取系统状态信息"""
         try:
             # 获取系统类型
-            system = platform.system()
+            system = platform.system() or "未知"
             # 获取系统版本
-            release = platform.release()
+            release = platform.release() or "未知"
             # 获取Python版本
-            python_version = platform.python_version()
+            python_version = platform.python_version() or "未知"
 
             return f"运行中 | 系统: {system} {release} | Python: {python_version}"
         except Exception as e:
